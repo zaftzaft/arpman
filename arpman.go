@@ -72,6 +72,7 @@ func Run() int {
 		}
 	}
 
+	// TODO error -> skip ?
 	for i, arpman := range list {
 		ifi, err := InterfaceByAddr(arpman.Address.String())
 		if err != nil {
@@ -79,7 +80,7 @@ func Run() int {
 			return 1
 		}
 		if ifi == nil {
-			log.Printf("failed to find interface")
+			log.Printf("failed to find interface by addr %s", arpman.Address.String())
 			return 1
 		}
 
@@ -88,7 +89,7 @@ func Run() int {
 
 			sockets[ifi.Name], err = raw.ListenPacket(ifi, 0x0806, nil)
 			if err != nil {
-				log.Printf("failed to listen : %v", err)
+				log.Printf("failed to listen %s : %v", ifi.Name, err)
 				return 1
 			}
 		}
