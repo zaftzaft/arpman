@@ -45,7 +45,11 @@ func main() {
 }
 
 func Run() int {
+	var useInterfaces UseInterfaces
 	list := make([]Arpman, 0)
+	sockets := make(map[string]*raw.Conn)
+
+
 
 	fp, err := os.Open(os.Args[1])
 	if err != nil {
@@ -70,9 +74,6 @@ func Run() int {
 		}
 	}
 
-	var useInterfaces UseInterfaces
-
-	sockets := make(map[string]*raw.Conn)
 
 	for i, arpman := range list {
 		ifi, err := InterfaceByAddr(arpman.Address.String())
@@ -117,16 +118,17 @@ func Run() int {
 
 	index := 0
 
+	drawLine := func(x int, y int, str string) {
+		for n, r := range []rune(str) {
+			termbox.SetCell(x+n, y, r, termbox.ColorDefault, termbox.ColorDefault)
+		}
+	}
+
 	render := func() {
 		w, _ := termbox.Size()
-		drawLine := func(x int, y int, str string) {
-			for n, r := range []rune(str) {
-				termbox.SetCell(x+n, y, r, termbox.ColorDefault, termbox.ColorDefault)
-			}
-		}
 
 		drawLine(0, 0, "arpman")
-		//drawLine(5, 0, strconv.Itoa(w))
+
 
 		for y, arpman := range list {
 			drawLine(0, y+1, strings.Repeat(" ", w)) // reset
@@ -134,15 +136,19 @@ func Run() int {
 			drawLine(2, y+1, arpman.Address.String())
 			//drawLine(19, y+1, strconv.Itoa(len(arpman.Macs)))
 
-			if len(arpman.Macs) > 0 {
-				drawLine(23, y+1, arpman.Macs[0].Addr.String())
+			macs := len(arpman.Macs)
+			if macs > 0 {
+				for i := 0;i < macs;i++ {
+					drawLine((i*19) + 23, y+1, arpman.Macs[i].Addr.String())
+				}
+
 				// DUP
+				if macs > 1 {
+					drawLine(19, y+1, "DUP")
+				}
+
 
 			}
-			//else if len(arpman.Macs) {
-
-			//}
-
 		}
 
 		// draw arrow >
@@ -157,31 +163,30 @@ func Run() int {
 	sr := func(arpman *Arpman) {
 		SendARP(*arpman, sockets)
 
+		arpman.Macs = make([]ExpirationAddr, 0)
+
 	wait:
 		for {
 			select {
 			case exaddr := <-exa:
 				if exaddr.IP.Equal(arpman.Address) {
-
-					for i, ex := range arpman.Macs {
-						if ex.Addr.String() == exaddr.Addr.String() {
-							// delete
-							arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
-						}
-					}
-
+					//for i, ex := range arpman.Macs {
+					//	if ex.Addr.String() == exaddr.Addr.String() {
+					//		// delete same addr
+					//		arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
+					//	}
+					//}
 					arpman.Macs = append(arpman.Macs, *exaddr)
 				}
 
 			case <-time.After(1 * time.Second):
 				// delete timeout macs
-				for i, ex := range arpman.Macs {
-					if time.Now().Sub(ex.Time) > 3 * time.Second {
-						// delete
-						arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
-						//log.Printf("%v", len(arpman.Macs))
-					}
-				}
+				//for i, ex := range arpman.Macs {
+				//	if time.Now().Sub(ex.Time) > 3 * time.Second {
+				//		// delete timeout
+				//		arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
+				//	}
+				//}
 				break wait
 			}
 
@@ -227,8 +232,6 @@ func sniffer(c *raw.Conn, exa chan *ExpirationAddr) {
 	var eh ether.EtherHeader
 	var ah arp.ArpHeader
 
-	exaddr := ExpirationAddr{}
-
 	data := make([]byte, 9100)
 	for {
 		n, _, err := c.ReadFrom(data)
@@ -236,6 +239,7 @@ func sniffer(c *raw.Conn, exa chan *ExpirationAddr) {
 			log.Printf("failed to read : %v", err)
 			continue
 		}
+		exaddr := ExpirationAddr{}
 
 		err = (&eh).Unmarshal(data[:n])
 		if eh.Type != 0x0806 {
