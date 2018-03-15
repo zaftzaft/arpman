@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 	//"strconv"
 	//"fmt"
 	//"encoding/binary"
@@ -10,6 +11,7 @@ import (
 	"github.com/nsf/termbox-go"
 	"strings"
 	"time"
+	"bufio"
 
 	"./arp"
 	"./ether"
@@ -39,14 +41,34 @@ func (u UseInterfaces) Contains(ifi *net.Interface) bool {
 }
 
 func main() {
+	os.Exit(Run())
+}
+
+func Run() int {
 	list := make([]Arpman, 0)
-	list = append(list,
-		Arpman{Address: net.ParseIP("192.168.1.1")},
-		Arpman{Address: net.ParseIP("192.168.1.6")},
-		Arpman{Address: net.ParseIP("192.168.1.222")},
-		Arpman{Address: net.ParseIP("192.168.1.170")},
-		Arpman{Address: net.ParseIP("192.168.100.4")},
-	)
+
+	fp, err := os.Open(os.Args[1])
+	if err != nil {
+		log.Printf("%v", err)
+		return 1
+	}
+	defer fp.Close()
+
+	scanner := bufio.NewScanner(fp)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		ip := net.ParseIP(line)
+
+		if ip != nil {
+			list = append(list,
+				Arpman{Address: ip},
+			)
+		}
+	}
 
 	var useInterfaces UseInterfaces
 
@@ -79,7 +101,7 @@ func main() {
 		go sniffer(sockets[uifi.Name], exa)
 	}
 
-	err := termbox.Init()
+	err = termbox.Init()
 	if err != nil {
 		panic(err)
 	}
@@ -198,6 +220,7 @@ loop:
 		}
 	}
 
+	return 0
 }
 
 func sniffer(c *raw.Conn, exa chan *ExpirationAddr) {
