@@ -5,13 +5,13 @@ import (
 	"net"
 	"os"
 	//"strconv"
-	//"fmt"
 	//"encoding/binary"
+	"bufio"
+	"fmt"
 	"github.com/mdlayher/raw"
 	"github.com/nsf/termbox-go"
 	"strings"
 	"time"
-	"bufio"
 
 	"./arp"
 	"./ether"
@@ -49,8 +49,6 @@ func Run() int {
 	list := make([]Arpman, 0)
 	sockets := make(map[string]*raw.Conn)
 
-
-
 	fp, err := os.Open(os.Args[1])
 	if err != nil {
 		log.Printf("%v", err)
@@ -74,14 +72,15 @@ func Run() int {
 		}
 	}
 
-
 	for i, arpman := range list {
 		ifi, err := InterfaceByAddr(arpman.Address.String())
 		if err != nil {
-			log.Fatalf("failed to find interface : %v", err)
+			log.Printf("failed to find interface : %v", err)
+			return 1
 		}
 		if ifi == nil {
-			log.Fatalf("failed to find interface")
+			log.Printf("failed to find interface")
+			return 1
 		}
 
 		if !useInterfaces.Contains(ifi) {
@@ -89,13 +88,13 @@ func Run() int {
 
 			sockets[ifi.Name], err = raw.ListenPacket(ifi, 0x0806, nil)
 			if err != nil {
-				log.Fatalf("failed to listen : %v", err)
+				log.Printf("failed to listen : %v", err)
+				return 1
 			}
 		}
 
 		list[i].IfName = ifi.Name
 	}
-
 
 	exa := make(chan *ExpirationAddr, 10)
 	for _, uifi := range useInterfaces {
@@ -104,7 +103,8 @@ func Run() int {
 
 	err = termbox.Init()
 	if err != nil {
-		panic(err)
+		log.Printf("%v", err)
+		return 1
 	}
 	defer termbox.Close()
 
@@ -114,7 +114,6 @@ func Run() int {
 			events <- termbox.PollEvent()
 		}
 	}()
-
 
 	index := 0
 
@@ -129,7 +128,6 @@ func Run() int {
 
 		drawLine(0, 0, "arpman")
 
-
 		for y, arpman := range list {
 			drawLine(0, y+1, strings.Repeat(" ", w)) // reset
 
@@ -138,15 +136,14 @@ func Run() int {
 
 			macs := len(arpman.Macs)
 			if macs > 0 {
-				for i := 0;i < macs;i++ {
-					drawLine((i*19) + 23, y+1, arpman.Macs[i].Addr.String())
+				for i := 0; i < macs; i++ {
+					drawLine((i*19)+23, y+1, arpman.Macs[i].Addr.String())
 				}
 
 				// DUP
 				if macs > 1 {
 					drawLine(19, y+1, "DUP")
 				}
-
 
 			}
 		}
@@ -157,7 +154,6 @@ func Run() int {
 		}
 		termbox.SetCell(0, index+1, '>', termbox.ColorDefault, termbox.ColorDefault)
 	}
-
 
 	nxch := make(chan int)
 	sr := func(arpman *Arpman) {
@@ -217,7 +213,7 @@ loop:
 		case ev := <-events:
 			switch ev.Type {
 			case termbox.EventKey:
-				if ev.Key == termbox.KeyEsc {
+				if ev.Key == termbox.KeyEsc || ev.Key == termbox.KeyCtrlC {
 					break loop
 				}
 			}
@@ -264,26 +260,28 @@ func SendARP(arpman Arpman, sockets map[string]*raw.Conn) error {
 
 	ifi, err := net.InterfaceByName(arpman.IfName)
 	if err != nil {
-		log.Fatalf("failed to get interface %s", arpman.IfName)
+		return fmt.Errorf("failed to get interface %s", arpman.IfName)
 	}
 
 	srcMac := ifi.HardwareAddr
 
 	addrs, err := ifi.Addrs()
 	if err != nil || len(addrs) == 0 {
-		log.Fatalf("failed to get IP Address in %s", ifi.Name)
+		return fmt.Errorf("failed to get IP Address in %s", ifi.Name)
 	}
 
 	for _, a := range addrs {
 		// is4
 		if strings.Contains(a.String(), ".") {
 			srcIP, _, err = net.ParseCIDR(a.String())
+
+			if err != nil {
+				return fmt.Errorf("failed parseCIDR %s", a.String())
+			}
+
 			srcIP = srcIP.To4()
 			break
 		}
-	}
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	eth := ether.EtherHeader{
@@ -318,9 +316,8 @@ func SendARP(arpman Arpman, sockets map[string]*raw.Conn) error {
 	sockets[arpman.IfName].WriteTo(frame, addr)
 
 	if err != nil {
-		log.Fatalf("failed to write : %v", err)
+		return fmt.Errorf("failed to write : %v", err)
 	}
 
 	return nil
 }
-
