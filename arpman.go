@@ -239,11 +239,18 @@ func sniffer(c *raw.Conn, exa chan *ExpirationAddr) {
 		exaddr := ExpirationAddr{}
 
 		err = (&eh).Unmarshal(data[:n])
+		if err != nil {
+			continue
+		}
+
 		if eh.Type != 0x0806 {
 			continue
 		}
 
 		err = (&ah).Unmarshal(data[eh.Length():n])
+		if err != nil {
+			continue
+		}
 
 		if ah.Op == arp.ArpOpReplay {
 			exaddr.IP = ah.IPSrc

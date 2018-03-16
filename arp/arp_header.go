@@ -2,6 +2,7 @@ package arp
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 )
 
@@ -41,7 +42,6 @@ func (a *ArpHeader) Length() int {
 }
 
 func (a *ArpHeader) Marshal() ([]byte, error) {
-	// FIXME length check
 	b := make([]byte, 28)
 	binary.BigEndian.PutUint16(b[0:2], a.HwType)
 	binary.BigEndian.PutUint16(b[2:4], a.PrType)
@@ -58,6 +58,11 @@ func (a *ArpHeader) Marshal() ([]byte, error) {
 }
 
 func (a *ArpHeader) Unmarshal(b []byte) error {
+	// length check
+	if len(b) < 28 {
+		return fmt.Errorf("invaild arp length: %d", len(b))
+	}
+
 	a.HwType = binary.BigEndian.Uint16(b[0:2])
 	a.PrType = binary.BigEndian.Uint16(b[2:4])
 	a.HwLen = b[4]
