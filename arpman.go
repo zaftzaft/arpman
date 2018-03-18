@@ -49,6 +49,11 @@ func Run() int {
 	list := make([]Arpman, 0)
 	sockets := make(map[string]*raw.Conn)
 
+	if len(os.Args) < 2 {
+		log.Printf("usage: arpman config.conf")
+		return 1
+	}
+
 	fp, err := os.Open(os.Args[1])
 	if err != nil {
 		log.Printf("%v", err)
