@@ -40,6 +40,15 @@ func (u UseInterfaces) Contains(ifi *net.Interface) bool {
 	return false
 }
 
+
+func SetAttr(x, y int, fg, bg termbox.Attribute) {
+	w, _ := termbox.Size()
+	cells := termbox.CellBuffer()
+	c := cells[y*w+x]
+
+	cells[y*w+x] = termbox.Cell{c.Ch, fg, bg}
+}
+
 func main() {
 	os.Exit(Run())
 }
@@ -149,6 +158,11 @@ func Run() int {
 				// DUP
 				if macs > 1 {
 					drawLine(19, y+1, "DUP")
+
+					for i := 0; i < w; i++ {
+						SetAttr(i, y+1, termbox.ColorRed, termbox.ColorDefault)
+					}
+
 				}
 
 			}
