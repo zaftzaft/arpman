@@ -2,11 +2,14 @@ package main
 
 import (
 	"net"
+	"strings"
+	"strconv"
 )
 
-// TODO longest match
 func InterfaceByAddr(s string) (*net.Interface, error) {
 	target := net.ParseIP(s)
+	var retIfi net.Interface
+	longest := 0
 
 	ifis, err := net.Interfaces()
 	if err != nil {
@@ -30,11 +33,24 @@ func InterfaceByAddr(s string) (*net.Interface, error) {
 			}
 
 			if ipnet.Contains(target) {
-				return &ifi, nil
+				mask, err := strconv.Atoi(strings.Split(a.String(), "/")[1])
+
+				if err != nil {
+					continue
+				}
+
+				if mask > longest {
+					retIfi = ifi
+					longest = mask
+				}
 			}
 
 		}
 
+	}
+
+	if retIfi.Index != 0 {
+		return &retIfi, nil
 	}
 
 	return nil, nil
