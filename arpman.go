@@ -10,12 +10,22 @@ import (
 	"fmt"
 	"github.com/mdlayher/raw"
 	"github.com/nsf/termbox-go"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"strings"
 	"time"
 
 	"./arp"
 	"./ether"
 )
+
+
+
+var (
+	timeout			= kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
+	configfile	= kingpin.Arg("configfile", "config file path").Required().String()
+)
+
+
 
 type ExpirationAddr struct {
 	IP   net.IP
@@ -50,6 +60,8 @@ func SetAttr(x, y int, fg, bg termbox.Attribute) {
 }
 
 func main() {
+	kingpin.Version("0.0.1")
+	kingpin.Parse()
 	os.Exit(Run())
 }
 
@@ -58,12 +70,7 @@ func Run() int {
 	list := make([]Arpman, 0)
 	sockets := make(map[string]*raw.Conn)
 
-	if len(os.Args) < 2 {
-		log.Printf("usage: arpman config.conf")
-		return 1
-	}
-
-	fp, err := os.Open(os.Args[1])
+	fp, err := os.Open(*configfile)
 	if err != nil {
 		log.Printf("%v", err)
 		return 1
@@ -195,7 +202,7 @@ func Run() int {
 					arpman.Macs = append(arpman.Macs, *exaddr)
 				}
 
-			case <-time.After(1 * time.Second):
+			case <-time.After(*timeout):
 				// delete timeout macs
 				//for i, ex := range arpman.Macs {
 				//	if time.Now().Sub(ex.Time) > 3 * time.Second {
