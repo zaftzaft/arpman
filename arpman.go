@@ -170,6 +170,11 @@ func Run() int {
 						SetAttr(i, y+1, termbox.ColorRed, termbox.ColorDefault)
 					}
 
+				} else {
+					// Success
+					for i := 0; i < w; i++ {
+						SetAttr(i, y+1, termbox.ColorGreen, termbox.ColorDefault)
+					}
 				}
 
 			}
