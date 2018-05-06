@@ -18,14 +18,11 @@ import (
 	"./ether"
 )
 
-
-
 var (
-	timeout			= kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
-	configfile	= kingpin.Arg("configfile", "config file path").Required().String()
+	timeout    = kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
+	stdout     = kingpin.Flag("stdout", "stdout flag").Short('o').Bool()
+	configfile = kingpin.Arg("configfile", "config file path").Required().String()
 )
-
-
 
 type ExpirationAddr struct {
 	IP   net.IP
@@ -50,7 +47,6 @@ func (u UseInterfaces) Contains(ifi *net.Interface) bool {
 	return false
 }
 
-
 func SetAttr(x, y int, fg, bg termbox.Attribute) {
 	w, _ := termbox.Size()
 	cells := termbox.CellBuffer()
@@ -60,7 +56,7 @@ func SetAttr(x, y int, fg, bg termbox.Attribute) {
 }
 
 func main() {
-	kingpin.Version("0.0.1")
+	kingpin.Version("0.0.2")
 	kingpin.Parse()
 	os.Exit(Run())
 }
@@ -123,12 +119,14 @@ func Run() int {
 		go sniffer(sockets[uifi.Name], exa)
 	}
 
-	err = termbox.Init()
-	if err != nil {
-		log.Printf("%v", err)
-		return 1
+	if !*stdout {
+		err = termbox.Init()
+		if err != nil {
+			log.Printf("%v", err)
+			return 1
+		}
+		defer termbox.Close()
 	}
-	defer termbox.Close()
 
 	events := make(chan termbox.Event)
 	go func() {
@@ -193,33 +191,21 @@ func Run() int {
 
 		arpman.Macs = make([]ExpirationAddr, 0)
 
-	wait:
-		for {
-			select {
-			case exaddr := <-exa:
-				if exaddr.IP.Equal(arpman.Address) {
-					//for i, ex := range arpman.Macs {
-					//	if ex.Addr.String() == exaddr.Addr.String() {
-					//		// delete same addr
-					//		arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
-					//	}
-					//}
-					arpman.Macs = append(arpman.Macs, *exaddr)
+		func() {
+			for {
+				select {
+				case exaddr := <-exa:
+					if exaddr.IP.Equal(arpman.Address) {
+						arpman.Macs = append(arpman.Macs, *exaddr)
+					}
+
+				case <-time.After(*timeout):
+					return
 				}
-
-			case <-time.After(*timeout):
-				// delete timeout macs
-				//for i, ex := range arpman.Macs {
-				//	if time.Now().Sub(ex.Time) > 3 * time.Second {
-				//		// delete timeout
-				//		arpman.Macs = append(arpman.Macs[:i], arpman.Macs[i+1:]...)
-				//	}
-				//}
-				break wait
 			}
+		}()
 
-		}
-
+		// next
 		nxch <- 1
 	}
 
@@ -227,31 +213,56 @@ func Run() int {
 	go func() {
 		nxch <- 1
 	}()
+	
+	lastFlag := false
+	// main loop
+	func() {
+		for {
+			select {
+			case <-nxch:
 
-loop:
-	for {
-		select {
+				if *stdout {
 
-		case <-nxch:
-			go sr(&list[index])
-			render()
-			termbox.Flush()
-			index++
+					if index > 0 {
+						arpman := list[index - 1]
+						fmt.Printf("%s ",  arpman.Address.String())
+						for i := 0; i < len(arpman.Macs); i++ {
+							fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+						}
+						fmt.Printf("\n")
+					}
 
-			if index >= len(list) {
-				index = 0
-			}
+				} else {
+					render()
+					termbox.Flush()
+				}
 
-		case ev := <-events:
-			switch ev.Type {
-			case termbox.EventKey:
-				if ev.Key == termbox.KeyEsc || ev.Key == termbox.KeyCtrlC {
-					break loop
+				if lastFlag {
+					return
+				}
+
+				go sr(&list[index])
+				index++
+
+				if index >= len(list) {
+					if *stdout {
+						lastFlag = true
+					} else {
+						index = 0
+					}
+				}
+
+			case ev := <-events:
+				switch ev.Type {
+				case termbox.EventKey:
+					if ev.Key == termbox.KeyEsc || ev.Key == termbox.KeyCtrlC {
+						//break loop
+						return
+					}
 				}
 			}
-
-		}
-	}
+		} // :loop
+	}()
 
 	return 0
 }

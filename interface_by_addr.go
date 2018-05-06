@@ -2,8 +2,8 @@ package main
 
 import (
 	"net"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 func InterfaceByAddr(s string) (*net.Interface, error) {
