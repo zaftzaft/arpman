@@ -28,6 +28,7 @@ type ExpirationAddr struct {
 	IP   net.IP
 	Time time.Time
 	Addr net.HardwareAddr
+	Own  bool
 }
 
 type Arpman struct {
@@ -56,7 +57,7 @@ func SetAttr(x, y int, fg, bg termbox.Attribute) {
 }
 
 func main() {
-	kingpin.Version("0.0.2")
+	kingpin.Version("0.0.3")
 	kingpin.Parse()
 	os.Exit(Run())
 }
@@ -157,7 +158,11 @@ func Run() int {
 			macs := len(arpman.Macs)
 			if macs > 0 {
 				for i := 0; i < macs; i++ {
-					drawLine((i*19)+23, y+1, arpman.Macs[i].Addr.String())
+					if arpman.Macs[i].Own {
+						drawLine((i*19)+23, y+1, "Own!")
+					} else {
+						drawLine((i*19)+23, y+1, arpman.Macs[i].Addr.String())
+					}
 				}
 
 				// DUP
@@ -190,6 +195,12 @@ func Run() int {
 		SendARP(*arpman, sockets)
 
 		arpman.Macs = make([]ExpirationAddr, 0)
+
+		if IsInterfaceOwnAddr(arpman.IfName, arpman.Address) {
+			arpman.Macs = append(arpman.Macs, ExpirationAddr{
+				Own: true,
+			})
+		}
 
 		func() {
 			for {
@@ -227,7 +238,11 @@ func Run() int {
 						arpman := list[index - 1]
 						fmt.Printf("%s ",  arpman.Address.String())
 						for i := 0; i < len(arpman.Macs); i++ {
-							fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+							if arpman.Macs[i].Own {
+								fmt.Printf("Own! ")
+							} else {
+								fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+							}
 						}
 						fmt.Printf("\n")
 					}
@@ -298,6 +313,7 @@ func sniffer(c *raw.Conn, exa chan *ExpirationAddr) {
 			exaddr.IP = ah.IPSrc
 			exaddr.Addr = eh.Src
 			exaddr.Time = time.Now()
+			exaddr.Own = false
 
 			exa <- &exaddr
 		}
@@ -370,4 +386,29 @@ func SendARP(arpman Arpman, sockets map[string]*raw.Conn) error {
 	}
 
 	return nil
+}
+
+
+func IsInterfaceOwnAddr(ifName string, target net.IP) bool {
+	ifi, err := net.InterfaceByName(ifName)
+	if err != nil {
+		return false
+	}
+	addrs, err := ifi.Addrs()
+	if err != nil {
+		return false
+	}
+
+	for _, a := range addrs {
+		ip, _, err := net.ParseCIDR(a.String())
+		if err != nil {
+			return false
+		}
+
+		if ip.Equal(target) {
+			return true
+		}
+	}
+
+	return false
 }
