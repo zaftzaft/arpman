@@ -6,5 +6,15 @@ arpman
 ## usage
 - quick scan
 ```bash
-$ arpman -t 100ms
+$ arpman addr.conf -t 100ms
+```
+
+- Stdout
+```bash
+$ arpman addr.conf -o
+```
+
+- Burst scan
+```bash
+$ arpman addr.conf -b 30
 ```

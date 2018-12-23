@@ -21,6 +21,7 @@ import (
 var (
 	timeout    = kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
 	stdout     = kingpin.Flag("stdout", "stdout flag").Short('o').Bool()
+	burst		   = kingpin.Flag("burst", "burst size").Short('b').Default("1").Int()
 	configfile = kingpin.Arg("configfile", "config file path").Required().String()
 )
 
@@ -64,8 +65,8 @@ func main() {
 
 func Run() int {
 	var useInterfaces UseInterfaces
-	list := make([]Arpman, 0)
 	sockets := make(map[string]*raw.Conn)
+	arpmanList := make([]*Arpman, 0)
 
 	fp, err := os.Open(*configfile)
 	if err != nil {
@@ -84,14 +85,14 @@ func Run() int {
 		ip := net.ParseIP(line)
 
 		if ip != nil {
-			list = append(list,
-				Arpman{Address: ip},
+			arpmanList = append(arpmanList,
+				&Arpman{Address: ip},
 			)
 		}
 	}
 
 	// TODO error -> skip ?
-	for i, arpman := range list {
+	for i, arpman := range arpmanList {
 		ifi, err := InterfaceByAddr(arpman.Address.String())
 		if err != nil {
 			log.Printf("failed to find interface : %v", err)
@@ -112,7 +113,7 @@ func Run() int {
 			}
 		}
 
-		list[i].IfName = ifi.Name
+		arpmanList[i].IfName = ifi.Name
 	}
 
 	exa := make(chan *ExpirationAddr, 10)
@@ -149,7 +150,8 @@ func Run() int {
 
 		drawLine(0, 0, "arpman")
 
-		for y, arpman := range list {
+		//for y, arpman := range list {
+		for y, arpman := range arpmanList {
 			drawLine(0, y+1, strings.Repeat(" ", w)) // reset
 
 			drawLine(2, y+1, arpman.Address.String())
@@ -184,30 +186,34 @@ func Run() int {
 		}
 
 		// draw arrow >
-		for y, _ := range list {
+		//for y, _ := range list {
+		for y, _ := range arpmanList {
 			termbox.SetCell(0, y+1, ' ', termbox.ColorDefault, termbox.ColorDefault)
 		}
 		termbox.SetCell(0, index+1, '>', termbox.ColorDefault, termbox.ColorDefault)
 	}
 
 	nxch := make(chan int)
-	sr := func(arpman *Arpman) {
-		SendARP(*arpman, sockets)
+	srBurst := func(arpmanList []*Arpman) {
+		for _, arpman := range arpmanList {
+			SendARP(*arpman, sockets)
+			arpman.Macs = make([]ExpirationAddr, 0)
 
-		arpman.Macs = make([]ExpirationAddr, 0)
-
-		if IsInterfaceOwnAddr(arpman.IfName, arpman.Address) {
-			arpman.Macs = append(arpman.Macs, ExpirationAddr{
-				Own: true,
-			})
+			if IsInterfaceOwnAddr(arpman.IfName, arpman.Address) {
+				arpman.Macs = append(arpman.Macs, ExpirationAddr{
+					Own: true,
+				})
+			}
 		}
 
 		func() {
 			for {
 				select {
 				case exaddr := <-exa:
-					if exaddr.IP.Equal(arpman.Address) {
-						arpman.Macs = append(arpman.Macs, *exaddr)
+					for _, arpman := range arpmanList {
+						if exaddr.IP.Equal(arpman.Address) {
+							arpman.Macs = append(arpman.Macs, *exaddr)
+						}
 					}
 
 				case <-time.After(*timeout):
@@ -228,6 +234,7 @@ func Run() int {
 	lastFlag := false
 	// main loop
 	func() {
+		prev := 0
 		for {
 			select {
 			case <-nxch:
@@ -235,16 +242,17 @@ func Run() int {
 				if *stdout {
 
 					if index > 0 {
-						arpman := list[index - 1]
-						fmt.Printf("%s ",  arpman.Address.String())
-						for i := 0; i < len(arpman.Macs); i++ {
-							if arpman.Macs[i].Own {
-								fmt.Printf("Own! ")
-							} else {
-								fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+						for _, arpman := range arpmanList[prev:index] {
+							fmt.Printf("%s ",  arpman.Address.String())
+							for i := 0; i < len(arpman.Macs); i++ {
+								if arpman.Macs[i].Own {
+									fmt.Printf("Own! ")
+								} else {
+									fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+								}
 							}
+							fmt.Printf("\n")
 						}
-						fmt.Printf("\n")
 					}
 
 				} else {
@@ -256,10 +264,15 @@ func Run() int {
 					return
 				}
 
-				go sr(&list[index])
-				index++
+				t := *burst
+				if index + t > len(arpmanList) {
+					t = len(arpmanList) - index
+				}
+				go srBurst(arpmanList[index:index+t])
+				prev = index
+				index += t
 
-				if index >= len(list) {
+				if index >= len(arpmanList) {
 					if *stdout {
 						lastFlag = true
 					} else {
