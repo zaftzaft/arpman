@@ -21,6 +21,7 @@ import (
 var (
 	timeout    = kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
 	stdout     = kingpin.Flag("stdout", "stdout flag").Short('o').Bool()
+	lookup     = kingpin.Flag("lookup", "OUI lookup").Short('l').Bool()
 	burst		   = kingpin.Flag("burst", "burst size").Short('b').Default("1").Int()
 	configfile = kingpin.Arg("configfile", "config file path").Required().String()
 )
@@ -58,7 +59,7 @@ func SetAttr(x, y int, fg, bg termbox.Attribute) {
 }
 
 func main() {
-	kingpin.Version("0.0.3")
+	kingpin.Version("0.0.4")
 	kingpin.Parse()
 	os.Exit(Run())
 }
@@ -249,7 +250,12 @@ func Run() int {
 									fmt.Printf("Own! ")
 								} else {
 									fmt.Printf("%s ", arpman.Macs[i].Addr.String())
+									if *lookup {
+										b := arpman.Macs[i].Addr
+										fmt.Printf("[%s] ", oui[((uint64(b[0])<<16)|(uint64(b[1])<<8)|(uint64(b[2])))])
+									}
 								}
+
 							}
 							fmt.Printf("\n")
 						}
