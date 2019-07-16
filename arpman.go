@@ -14,15 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"./arp"
-	"./ether"
+	"github.com/zaftzaft/arpman/arp"
+	"github.com/zaftzaft/arpman/ether"
 )
 
 var (
 	timeout    = kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
 	stdout     = kingpin.Flag("stdout", "stdout flag").Short('o').Bool()
 	lookup     = kingpin.Flag("lookup", "OUI lookup").Short('l').Bool()
-	burst		   = kingpin.Flag("burst", "burst size").Short('b').Default("1").Int()
+	burst      = kingpin.Flag("burst", "burst size").Short('b').Default("1").Int()
 	configfile = kingpin.Arg("configfile", "config file path").Required().String()
 )
 
@@ -231,7 +231,7 @@ func Run() int {
 	go func() {
 		nxch <- 1
 	}()
-	
+
 	lastFlag := false
 	// main loop
 	func() {
@@ -244,7 +244,7 @@ func Run() int {
 
 					if index > 0 {
 						for _, arpman := range arpmanList[prev:index] {
-							fmt.Printf("%s ",  arpman.Address.String())
+							fmt.Printf("%s ", arpman.Address.String())
 							for i := 0; i < len(arpman.Macs); i++ {
 								if arpman.Macs[i].Own {
 									fmt.Printf("Own! ")
@@ -271,10 +271,10 @@ func Run() int {
 				}
 
 				t := *burst
-				if index + t > len(arpmanList) {
+				if index+t > len(arpmanList) {
 					t = len(arpmanList) - index
 				}
-				go srBurst(arpmanList[index:index+t])
+				go srBurst(arpmanList[index : index+t])
 				prev = index
 				index += t
 
@@ -406,7 +406,6 @@ func SendARP(arpman Arpman, sockets map[string]*raw.Conn) error {
 
 	return nil
 }
-
 
 func IsInterfaceOwnAddr(ifName string, target net.IP) bool {
 	ifi, err := net.InterfaceByName(ifName)
