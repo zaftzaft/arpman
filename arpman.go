@@ -1,22 +1,22 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"os"
-	//"strconv"
-	//"encoding/binary"
-	"bufio"
-	"fmt"
-	"github.com/mdlayher/raw"
-	"github.com/nsf/termbox-go"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"strings"
 	"time"
 
+	"github.com/mdlayher/raw"
+	"github.com/nsf/termbox-go"
 	"github.com/zaftzaft/arpman/arp"
 	"github.com/zaftzaft/arpman/ether"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
+
+const version = "0.0.5"
 
 var (
 	timeout    = kingpin.Flag("timeout", "timeout").Short('t').Default("1s").Duration()
@@ -59,7 +59,7 @@ func SetAttr(x, y int, fg, bg termbox.Attribute) {
 }
 
 func main() {
-	kingpin.Version("0.0.4")
+	kingpin.Version(version)
 	kingpin.Parse()
 	os.Exit(Run())
 }
